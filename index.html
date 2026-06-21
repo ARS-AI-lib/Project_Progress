@@ -641,17 +641,28 @@ function deriveMilestoneStatus(task, today) {
 // ============================================================
 // PROJECT-LEVEL AGGREGATION
 // ============================================================
-function computeProjectMetrics(tasks, today) {
+function computeProjectMetrics(tasks, phaseOrder, today) {
   const nonMilestoneTasks = tasks.filter(t => !t.isMilestone);
   const base = nonMilestoneTasks.length ? nonMilestoneTasks : tasks;
 
-  let totalDuration = 0;
+  // Overall Progress: roll up from phase-level progress, weighted by
+  // (phase timespan in days × phase task count) so phases packing more
+  // tasks into the same timeframe carry more weight in the project total —
+  // reflecting effort/parallelism, not just elapsed time.
+  const phaseProgress = computePhaseProgress(tasks, phaseOrder, today);
+  let totalWeight = 0;
   let weightedProgress = 0;
-  base.forEach(t => {
-    totalDuration += t.durationDays;
-    weightedProgress += t.durationDays * t.progress;
+  phaseProgress.forEach(ph => {
+    const phaseTasks = base.filter(t => t.phase === ph.phase);
+    if (!phaseTasks.length) return;
+    const phaseStart = Math.min(...phaseTasks.map(t => t.start.getTime()));
+    const phaseEnd = Math.max(...phaseTasks.map(t => t.end.getTime()));
+    const phaseDuration = Math.max(1, (phaseEnd - phaseStart) / 86400000);
+    const weight = phaseDuration * ph.taskCount;
+    totalWeight += weight;
+    weightedProgress += ph.progress * weight;
   });
-  const overallProgress = totalDuration > 0 ? weightedProgress / totalDuration : 0;
+  const overallProgress = totalWeight > 0 ? weightedProgress / totalWeight : 0;
 
   const starts = tasks.map(t => t.start.getTime());
   const ends = tasks.map(t => t.end.getTime());
@@ -677,6 +688,7 @@ function computeProjectMetrics(tasks, today) {
     projectEnd,
     delayedCount: delayedTasks.length,
     health,
+    phaseProgress, // expose so caller doesn't need to recompute
   };
 }
 
@@ -753,8 +765,8 @@ async function loadAllProjectData() {
       if (!tasks.length) {
         return { ...proj, error: 'ไม่พบ task ที่อ่านได้ในชีต Project Gantt (ตรวจสอบ gid และ format วันที่)' };
       }
-      const metrics = computeProjectMetrics(tasks, today);
-      const phaseProgress = computePhaseProgress(tasks, phaseOrder, today);
+      const metrics = computeProjectMetrics(tasks, phaseOrder, today);
+      const phaseProgress = metrics.phaseProgress;
       const milestones = extractMilestones(tasks);
       const agentCoverage = computeCoverage(tasks, agentMap, 'agents');
       const skillCoverage = computeCoverage(tasks, skillMap, 'skills');
