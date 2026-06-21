@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Project Timeline</title>
+<title>AI Project Portfolio</title>
 <style>
   :root{
     --bg:#f4f6fb;
@@ -302,7 +302,7 @@
     <div class="brand">
       <div class="brand-mark">AI</div>
       <div class="brand-text">
-        <h1>AI Project Timeline</h1>
+        <h1>AI Project Portfolio</h1>
         <p>Agent &amp; Skill development tracking across projects</p>
       </div>
     </div>
@@ -1019,7 +1019,7 @@ function detailHeaderHTML(p) {
           <div class="k-value">${fmtDate(p.metrics.projectStart)}</div>
         </div>
         <div class="dh-kpi">
-          <div class="k-label">Go-Live (Gantt)</div>
+          <div class="k-label">Go-Live</div>
           <div class="k-value">${fmtDate(p.metrics.projectEnd)}</div>
         </div>
         <div class="dh-kpi">
@@ -1070,7 +1070,12 @@ function ganttPanelHTML(p) {
         <span><span class="legend-dot" style="background:${STATUS_COLORS['At Risk'].fg}"></span>At Risk</span>
         <span><span class="legend-dot" style="background:${STATUS_COLORS['Delayed'].fg}"></span>Delayed</span>
         <span><span class="legend-dot" style="background:${STATUS_COLORS['Done'].fg}"></span>Done</span>
-        <span style="margin-left:auto; color:var(--text-faint);">┊ today</span>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:6px; color:var(--text-faint); font-size:12px;">
+          <svg width="20" height="16" style="flex-shrink:0;">
+            <line x1="2" y1="8" x2="18" y2="8" stroke="#e0473b" stroke-width="1.5" stroke-dasharray="4,3" stroke-linecap="round" />
+          </svg>
+          today
+        </span>
       </div>
       <div class="gantt-wrap">
         <canvas id="ganttCanvas-${p.id}"></canvas>
@@ -1190,7 +1195,7 @@ function initGanttCanvas(p) {
     ctx.setLineDash([]);
     ctx.fillStyle = css.todayLine;
     ctx.font = '10px Inter, system-ui, sans-serif';
-    ctx.fillText('Today', tx + 4, headerH + 12);
+    ctx.fillText('Today', tx + 4, headerH + 24);
   }
 
   // rows
@@ -1519,7 +1524,6 @@ function coverageItemHTML(c) {
         <span class="coverage-status-dot" style="background:${sc.fg}"></span>
         <span class="ci-name" title="${esc(c.name)}">${esc(c.name)}</span>
       </div>
-      <span class="ci-count">${c.taskCount} task${c.taskCount===1?'':'s'} · avg ${fmtPct(c.avgProgress)}</span>
     </div>
   `;
 }
