@@ -564,9 +564,15 @@ function parseGantt(rows) {
 
     if (!taskName) continue; // a row with only a phase label and nothing else
 
-    const start = parseFlexDate(startRaw);
-    const end = parseFlexDate(endRaw);
-    if (!start || !end) continue; // unparseable row, skip defensively
+    let start = parseFlexDate(startRaw);
+    let end = parseFlexDate(endRaw);
+    if (!start && !end) continue; // genuinely no date info, skip defensively
+
+    // single-date task: only Start or only End provided -> treat as a pin at that date
+    let isPin = false;
+    if (start && !end) { end = start; isPin = true; }
+    else if (!start && end) { start = end; isPin = true; }
+    else if (start.getTime() === end.getTime()) { isPin = true; }
 
     const progress = parsePercent(progressRaw);
     const status = normalizeStatus(statusRaw);
@@ -584,7 +590,8 @@ function parseGantt(rows) {
       durationDays: Math.max(1, (end - start) / 86400000),
       progress,
       rawStatus: status,
-      isMilestone: start.getTime() === end.getTime(),
+      isMilestone: isPin,
+      isPin,
     });
   }
 
@@ -1099,7 +1106,7 @@ function initGanttCanvas(p) {
     if (items.length) phaseGroups.push({ phase, items });
   });
 
-  const rowH = 26;
+  const rowH = 30;
   const headerH = 36;
   const leftLabelW = 230;
   const dayW = 9; // px per day, will scale down if too wide
@@ -1200,10 +1207,6 @@ function initGanttCanvas(p) {
     y += rowH;
 
     group.items.forEach(task => {
-      const barX = xForDate(task.start);
-      const barW = Math.max(3, xForDate(task.end) - barX);
-      const barY = y + 4;
-      const barH = rowH - 12;
       const color = colorForGanttTask(task, today);
 
       // task label (left side, truncated)
@@ -1214,24 +1217,66 @@ function initGanttCanvas(p) {
       if (label.length > maxChars) label = label.slice(0, maxChars - 1) + '…';
       ctx.fillText(label, 10, y + rowH / 2 + 4);
 
-      // bar background (track)
-      ctx.fillStyle = css.bgElev;
-      roundRect(ctx, barX, barY, barW, barH, 4);
-      ctx.fill();
+      if (task.isPin) {
+        // single-date task: draw a triangular pin at that date, with the date label below it
+        const px = xForDate(task.start);
+        const pinTopY = y + 5;
+        const pinSize = 7;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, pinTopY);
+        ctx.lineTo(px - pinSize, pinTopY + pinSize * 1.6);
+        ctx.lineTo(px + pinSize, pinTopY + pinSize * 1.6);
+        ctx.closePath();
+        ctx.fill();
 
-      // progress fill
-      const fillW = Math.max(0, barW * (task.progress / 100));
-      ctx.fillStyle = color;
-      roundRect(ctx, barX, barY, Math.max(fillW, task.progress > 0 ? 3 : 0), barH, 4);
-      ctx.fill();
+        // date label underneath, format "D MMM"
+        ctx.fillStyle = css.textDim;
+        ctx.font = '10px Inter, system-ui, sans-serif';
+        const dateLabel = task.start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const labelW = ctx.measureText(dateLabel).width;
+        ctx.fillText(dateLabel, px - labelW / 2, pinTopY + pinSize * 1.6 + 12);
 
-      // bar outline
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      roundRect(ctx, barX, barY, barW, barH, 4);
-      ctx.stroke();
+        const hbX = px - Math.max(pinSize, labelW / 2) - 2;
+        const hbW = Math.max(pinSize, labelW / 2) * 2 + 4;
+        hitboxes.push({ x: hbX, y: pinTopY - 2, w: hbW, h: pinSize * 1.6 + 16, task });
+      } else {
+        const barX = xForDate(task.start);
+        const barW = Math.max(3, xForDate(task.end) - barX);
+        const barY = y + 4;
+        const barH = rowH - 12;
 
-      hitboxes.push({ x: barX, y: barY, w: barW, h: barH, task });
+        // bar background (track)
+        ctx.fillStyle = css.bgElev;
+        roundRect(ctx, barX, barY, barW, barH, 4);
+        ctx.fill();
+
+        // progress fill
+        const fillW = Math.max(0, barW * (task.progress / 100));
+        ctx.fillStyle = color;
+        roundRect(ctx, barX, barY, Math.max(fillW, task.progress > 0 ? 3 : 0), barH, 4);
+        ctx.fill();
+
+        // bar outline
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        roundRect(ctx, barX, barY, barW, barH, 4);
+        ctx.stroke();
+
+        // progress % label, left-aligned inside the bar
+        const pctLabel = `${Math.round(task.progress)}%`;
+        ctx.font = '600 10px Inter, system-ui, sans-serif';
+        const pctW = ctx.measureText(pctLabel).width;
+        if (barW > pctW + 10) {
+          // enough room inside the bar - place just left of the fill edge, but never past bar start
+          ctx.fillStyle = task.progress > 15 ? '#ffffff' : css.text;
+          ctx.fillText(pctLabel, barX + 6, barY + barH / 2 + 3.5);
+        }
+
+        hitboxes.push({ x: barX, y: barY, w: barW, h: barH, task });
+      }
       y += rowH;
     });
   });
